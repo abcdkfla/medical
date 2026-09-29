@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#07131f" />
+  <title>Fed-Batch Lab — 배양 시뮬레이터</title>
+  <meta name="description" content="E. coli BL21과 C. glutamicum의 fed-batch 배양을 탐색하는 교육용 시뮬레이터" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div><h1>FED-BATCH <b>LAB</b></h1><p>교육용 생물반응기 시뮬레이터</p></div>
+    </div>
+    <div class="culture-meta">
+      <span class="strain-label">미생물 선택</span>
+      <div class="segmented" role="group" aria-label="균주 선택">
+        <button class="strain-btn active" data-strain="bl21">E. coli BL21</button>
+        <button class="strain-btn" data-strain="cg">C. glutamicum</button>
+      </div>
+      <button id="formulaBtn" class="ghost-btn">ƒx&nbsp; 수식 보기</button>
+      <button class="ghost-btn page-tab equipment-link" data-page="equipmentPage">장비 실습</button>
+      <button id="runBtn" class="run-btn"><span>▶</span> RUN</button>
+    </div>
+  </header>
+
+  <main id="simPage" class="workspace app-page active">
+    <section class="panel media-panel">
+      <div class="panel-heading">
+        <div><span class="eyebrow">MEDIA COMPOSER</span><h2>♧&nbsp; 배지 조성기</h2></div>
+        <button id="resetMedia" class="load-btn">▣ 기본 조성 불러오기</button>
+      </div>
+      <p class="helper">정의배지의 시약과 투입량을 직접 구성하세요.</p>
+      <div class="table-head"><span></span><span>시약 (Reagent)</span><span>농도 (g/L)</span><span>비고</span><span></span></div>
+      <div id="reagentRows" class="reagent-list"></div>
+      <div class="media-actions">
+        <button id="addReagentWide" class="add-btn">＋ 시약 추가</button>
+      </div>
+      <div class="divider"></div>
+      <div class="field-grid two">
+        <label><span>작업부피 V₀</span><div class="unit-input"><input id="v0" type="number" min="0.2" max="4" step="0.1" value="2.0"><b>L</b></div></label>
+        <label><span>접종량 X₀</span><div class="unit-input"><input id="x0" type="number" min="0.01" step="0.01" value="0.12"><b>g/L</b></div></label>
+      </div>
+      <div class="calc-box">
+        <div class="calc-title"><span>자동 계산</span><small>질량수지 기반</small></div>
+        <dl>
+          <div><dt>초기 탄소원 S₀</dt><dd id="s0Calc">20.0 <small>g/L</small></dd></div>
+          <div><dt>초기 질소 N₀</dt><dd id="n0Calc">4.24 <small>g/L</small></dd></div>
+          <div><dt>C:N 비</dt><dd id="cnCalc">4.7 : 1</dd></div>
+          <div><dt>이론 Xmax</dt><dd id="xmaxCalc">9.60 <small>g/L</small></dd></div>
+        </dl>
+        <div id="limitAlert" class="limit-alert ok"><i>✓</i><span>질소 공급이 충분합니다</span></div>
+      </div>
+    </section>
+
+    <section class="panel control-panel">
+      <div class="panel-heading"><div><span class="eyebrow">02 / BIOREACTOR</span><h2>장비 제어</h2></div><span class="mode-badge">AUTO</span></div>
+      <div class="controller-screen">
+        <div><span>VESSEL</span><strong>BR-01</strong></div><div><span>ELAPSED</span><strong id="elapsed">00:00</strong></div><div><span>STATUS</span><strong class="cyan">READY</strong></div>
+      </div>
+      <div class="control-group">
+        <div class="group-title"><span>GAS &amp; AGITATION</span><em id="vvmRead">0.50 vvm</em></div>
+        <label class="range-row"><span>AIR <small>(공기)</small></span><input id="air" type="range" min="0" max="2" step="0.1" value="1"><output>1.0</output><em>vvm</em></label>
+        <label class="range-row"><span>O₂ <small>(산소)</small></span><input id="o2" type="range" min="0" max="1" step="0.05" value=".5"><output>0.5</output><em>vvm</em></label>
+        <label class="range-row"><span>AGIT <small>(교반기)</small></span><input id="rpm" type="range" min="0" max="1200" step="25" value="600"><output>600</output><em>rpm</em></label>
+        <div class="inline-metrics"><span>yO₂ <b id="yo2Read">21.0%</b></span><span>가스 합계 <b id="gasRead">1.0 L/min</b></span></div>
+      </div>
+      <div class="control-group">
+        <div class="group-title"><span>PERISTALTIC PUMPS</span><em>mL/h</em></div>
+        <div class="pump-grid">
+          <label class="pump acid"><span><i></i>ACID</span><small>H₃PO₄ (1 M)</small><input id="acid" type="number" min="0" value="0" step="0.1"><b>mL/h</b><button type="button">▶ <em>수동</em> ⚙</button></label>
+          <label class="pump base"><span><i></i>BASE</span><small>NaOH (1 M)</small><input id="base" type="number" min="0" value="3" step="0.1"><b>mL/h</b><button type="button">▶ <em>수동</em> ⚙</button></label>
+          <label class="pump feed"><span><i></i>FEED</span><small>농축 배지</small><input id="feed" type="number" min="0" value="18" step="1"><b>mL/h</b><button type="button">▶ <em>수동</em> ⚙</button></label>
+          <label class="pump foam"><span><i></i>FOAM</span><small>소포제</small><input id="foam" type="number" min="0" value="0" step="0.1"><b>mL/h</b><button type="button">▶ <em>수동</em> ⚙</button></label>
+        </div>
+        <label class="wide-field"><span>피드 글루코스 Sf</span><div class="unit-input"><input id="sf" type="number" min="0" value="500"><b>g/L</b></div></label>
+      </div>
+      <div class="control-group">
+        <div class="group-title"><span>SETPOINTS</span></div>
+        <div class="setpoint-grid">
+          <label><span>DO<sub>sp</sub></span><div><input id="dosp" type="number" value="30" min="1" max="100"><b>%</b></div></label>
+          <label><span>pH<sub>sp</sub></span><div><input id="phsp" type="number" value="7.0" min="4" max="9" step="0.1"></div></label>
+          <label><span>T<sub>sp</sub></span><div><input id="tsp" type="number" value="37" min="20" max="45"><b>°C</b></div></label>
+        </div>
+      </div>
+      <div class="offgas">
+        <div class="group-title"><span>OFF-GAS ANALYZER</span><em>DRY GAS</em></div>
+        <div class="gas-display"><div><span>O₂ OUT</span><strong id="o2out">18.6<small>%</small></strong></div><div><span>CO₂ OUT</span><strong id="co2out">2.1<small>%</small></strong></div></div>
+        <div class="inline-metrics three"><span>OUR <b id="ourSmall">5.6</b></span><span>CER <b id="cerSmall">4.8</b></span><span>RQ <b id="rqSmall">0.86</b></span></div>
+      </div>
+    </section>
+
+    <section class="panel results-panel">
+      <div class="panel-heading"><div><span class="eyebrow">CULTURE OUTPUT</span><h2>▥&nbsp; 배양 결과</h2></div><div class="results-actions"><div class="time-select"><button class="active" data-hours="24">24h</button><button data-hours="48">48h</button><button data-hours="72">72h</button><div class="duration-input"><input id="durationInput" type="number" min="1" max="240" value="24"><span>h</span></div></div><button id="exportCsv" class="export-btn">⇩ 데이터 내보내기</button></div></div>
+      <div class="chart-wrap">
+        <div class="chart-header"><div><span id="chartTitle">BIOMASS X</span><strong id="chartValue">0.12 g/L</strong></div><div id="chartLegend" class="chart-legend"></div></div>
+        <canvas id="mainChart" width="900" height="430" aria-label="배양 결과 그래프"></canvas>
+        <div class="chart-tabs" role="tablist">
+          <button class="active" data-chart="X"><i style="--c:#36e2c3"></i>X 세포</button>
+          <button data-chart="S"><i style="--c:#6ea8fe"></i>S 글루코스</button>
+          <button data-chart="DO"><i style="--c:#ffcb6b"></i>DO</button>
+          <button data-chart="pH"><i style="--c:#c792ea"></i>pH</button>
+          <button data-chart="A" id="acetateTab"><i style="--c:#ff7a90"></i>아세트산</button>
+          <button data-chart="V"><i style="--c:#86b7fe"></i>V 부피</button>
+        </div>
+      </div>
+      <div class="metric-grid">
+        <article><span>성장속도 μ</span><strong id="muCard">0.000</strong><small>h⁻¹</small></article>
+        <article><span>배가시간 t<sub>d</sub></span><strong id="tdCard">—</strong><small>h</small></article>
+        <article class="accent"><span>최종 바이오매스</span><strong id="bioCard">0.24</strong><small>g DCW</small></article>
+        <article><span>OTR</span><strong id="otrCard">5.8</strong><small>mmol/L·h</small></article>
+        <article><span>OUR</span><strong id="ourCard">5.6</strong><small>mmol/L·h</small></article>
+        <article><span>누적 BASE</span><strong id="baseCard">72</strong><small>mL</small></article>
+        <article><span>누적 FEED</span><strong id="feedCard">432</strong><small>mL</small></article>
+        <article><span>최종 부피</span><strong id="volCard">2.50</strong><small>L</small></article>
+      </div>
+      <div class="insight" id="insight"><span>AI</span><p><b>공정 인사이트</b><br><em>RUN을 누르면 제한 요인과 오버플로 대사 위험을 분석합니다.</em></p></div>
+    </section>
+  </main>
+
+  <main id="equipmentPage" class="equipment-page app-page" hidden>
+    <div class="equipment-titlebar">
+      <div><span class="eyebrow">HARDWARE TRAINER / ARA DUAL VESSEL</span><h2>실제 장비 조작 실습</h2><p>사진 속 전면 패널을 기준으로 가스와 펌프를 조작해보세요. 이 화면은 교육용 디지털 트윈이며 실제 장비에 명령을 보내지 않습니다.</p></div>
+      <div class="equipment-actions"><button class="ghost-btn page-tab" data-page="simPage">← 시뮬레이터</button><span class="demo-pill"><i></i> TRAINING MODE</span><button id="applyHardware" class="run-btn">SIM에 적용</button></div>
+    </div>
+    <div class="equipment-layout">
+      <section class="machine-frame" aria-label="ARA 생물반응기 조작 패널">
+        <div class="machine-display">
+          <div class="machine-logo">A&nbsp;&nbsp;R&nbsp;&nbsp;A <small>DUAL BIOREACTOR CONTROL</small></div>
+          <div class="display-grid">
+            <div><span>VESSEL A · DO</span><strong id="hwDo">30.0<small>%</small></strong></div>
+            <div><span>VESSEL A · pH</span><strong id="hwPh">7.00</strong></div>
+            <div><span>TEMP</span><strong id="hwTemp">37.0<small>°C</small></strong></div>
+            <div><span>MODE</span><strong class="status-on">READY</strong></div>
+          </div>
+        </div>
+
+        <div class="hardware-zone">
+          <section class="flow-bank">
+            <div class="hardware-label"><span>GAS FLOW</span><small>ROTAMETER · L/min</small></div>
+            <div class="flow-meters">
+              <label><b>AIR · A</b><output id="hwAirAOut">1.0</output><div class="meter-tube"><div class="meter-scale"></div><input id="hwAirA" class="vertical-range" type="range" min="0" max="2" step="0.1" value="1"></div></label>
+              <label><b>O₂ · A</b><output id="hwO2AOut">0.0</output><div class="meter-tube"><div class="meter-scale"></div><input id="hwO2A" class="vertical-range" type="range" min="0" max="1" step="0.05" value="0"></div></label>
+              <label><b>AIR · B</b><output id="hwAirBOut">0.8</output><div class="meter-tube"><div class="meter-scale"></div><input id="hwAirB" class="vertical-range" type="range" min="0" max="2" step="0.1" value=".8"></div></label>
+              <label><b>O₂ · B</b><output id="hwO2BOut">0.0</output><div class="meter-tube"><div class="meter-scale"></div><input id="hwO2B" class="vertical-range" type="range" min="0" max="1" step="0.05" value="0"></div></label>
+            </div>
+          </section>
+
+          <section class="physical-pumps">
+            <div class="hardware-label"><span>PERISTALTIC PUMP</span><small>VESSEL A / VESSEL B</small></div>
+            <div class="pump-bank-head"><span>VESSEL A</span><span>VESSEL B</span></div>
+            <div id="hardwarePumps" class="hardware-pump-grid">
+              <article class="hardware-pump" data-pump="acidA"><span>ACID</span><button class="pump-head" aria-label="A 산 펌프 전원"><i></i></button><div><input type="number" min="0" step=".1" value="0"><small>mL/h</small></div></article>
+              <article class="hardware-pump" data-pump="acidB"><span>ACID</span><button class="pump-head" aria-label="B 산 펌프 전원"><i></i></button><div><input type="number" min="0" step=".1" value="0"><small>mL/h</small></div></article>
+              <article class="hardware-pump" data-pump="baseA"><span>BASE</span><button class="pump-head" aria-label="A 염기 펌프 전원"><i></i></button><div><input type="number" min="0" step=".1" value="3"><small>mL/h</small></div></article>
+              <article class="hardware-pump" data-pump="baseB"><span>BASE</span><button class="pump-head" aria-label="B 염기 펌프 전원"><i></i></button><div><input type="number" min="0" step=".1" value="2"><small>mL/h</small></div></article>
+              <article class="hardware-pump active" data-pump="feedA"><span>FEED</span><button class="pump-head" aria-label="A 피드 펌프 전원"><i></i></button><div><input type="number" min="0" step="1" value="18"><small>mL/h</small></div></article>
+              <article class="hardware-pump" data-pump="feedB"><span>FEED</span><button class="pump-head" aria-label="B 피드 펌프 전원"><i></i></button><div><input type="number" min="0" step="1" value="12"><small>mL/h</small></div></article>
+              <article class="hardware-pump" data-pump="foamA"><span>FOAM</span><button class="pump-head" aria-label="A 소포제 펌프 전원"><i></i></button><div><input type="number" min="0" step=".1" value="0"><small>mL/h</small></div></article>
+              <article class="hardware-pump" data-pump="foamB"><span>FOAM</span><button class="pump-head" aria-label="B 소포제 펌프 전원"><i></i></button><div><input type="number" min="0" step=".1" value="0"><small>mL/h</small></div></article>
+            </div>
+          </section>
+        </div>
+
+        <div class="sensor-ports">
+          <span>CO₂ OUT<i></i></span><span>O₂ OUT<i></i></span><span>N₂ OUT<i></i></span><span>AIR OUT<i></i></span>
+          <span class="connected">TEMP<i></i></span><span class="connected">pH<i></i></span><span class="connected">DO<i></i></span><span>FOAM<i></i></span><span>ORP / TCD<i></i></span>
+        </div>
+      </section>
+
+      <aside class="hardware-sidebar">
+        <section class="live-summary">
+          <div class="card-heading"><span>조작 결과 · Vessel A</span><small>LIVE</small></div>
+          <dl>
+            <div><dt>총 가스</dt><dd id="hwGasTotal">1.00 L/min</dd></div>
+            <div><dt>유입 O₂</dt><dd id="hwYO2">21.0%</dd></div>
+            <div><dt>vvm</dt><dd id="hwVvm">0.50</dd></div>
+            <div><dt>활성 펌프</dt><dd id="hwActivePumps">FEED</dd></div>
+            <div><dt>24h 액체 유입</dt><dd id="hwLiquid">432 mL</dd></div>
+          </dl>
+          <div id="hardwareAlert" class="hardware-alert ok"><i>✓</i><p><b>연결 상태 양호</b><span>가스 공급과 FEED 라인이 준비되었습니다.</span></p></div>
+        </section>
+        <section class="training-card">
+          <div class="card-heading"><span>운전 전 체크</span><small>4 ITEMS</small></div>
+          <label><input type="checkbox"> pH·DO 프로브 교정</label>
+          <label><input type="checkbox"> 산·염기·피드 라인 프라이밍</label>
+          <label><input type="checkbox"> 배기 콘덴서 및 필터 연결</label>
+          <label><input type="checkbox"> 비상정지·거품 센서 확인</label>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <div class="run-console"><span>배양 시간 <b id="liveTime">24.0 h</b></span><label>재생 속도 <select id="simSpeed"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><button id="resetSim">↺ 초기화</button><span id="footerStatus"><i></i> 시뮬레이션 엔진 정상</span></div>
+    <span>Fed-Batch Lab v1.2 · 교육용 모델</span>
+  </footer>
+
+  <dialog id="formulaDialog">
+    <div class="dialog-head"><div><span class="eyebrow">MODEL REFERENCE</span><h2>시뮬레이션 수식</h2></div><button id="closeFormula" aria-label="닫기">×</button></div>
+    <div class="formula-list">
+      <section><b>성장</b><code>μ = μmax · S/(Ks+S) · DO/(Kₒ₂+DO) · f(pH) · g(T)</code><p>배가시간 t<sub>d</sub> = ln2/μ · 성장곡선 추정 μ = (ln X₂ − ln X₁)/(t₂ − t₁)</p></section>
+      <section><b>기질 · Pirt</b><code>qS = μ/Yx/s + mS</code></section>
+      <section><b>산소전달</b><code>OTR = kLa(C* − C)</code><p>kLa = k(P/V)<sup>0.7</sup>(vvm)<sup>0.3</sup> · C* = yO₂ × 포화 DO · OUR = qO₂X</p></section>
+      <section><b>pH · 염기</b><code>Fbase = (μXV / YX/N) ÷ Cbase</code><p>암모늄 흡수에 따른 H⁺ 방출을 중화합니다. ACID는 pH가 셋포인트를 초과할 때만 작동합니다.</p></section>
+      <section><b>피드 · 부피</b><code>dV/dt = Ffeed + Fbase + Facid + Ffoam</code><code>dS/dt = −qS·X + (F/V)(Sf − S)</code></section>
+      <section id="acetateFormula"><b>BL21 아세트산</b><code>qA = kA(qS − qS,crit), if qS &gt; qS,crit</code><p>아세트산 2–5 g/L 구간부터 성장 저해가 커집니다.</p></section>
+      <section><b>물질수지</b><p>dX/dt · dS/dt · dDO/dt · dA/dt · dV/dt를 오일러 적분으로 계산합니다.</p></section>
+    </div>
+  </dialog>
+  <script src="./app.js"></script>
+</body>
+</html>
